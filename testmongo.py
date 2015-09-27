@@ -2,7 +2,7 @@
 from mongoengine import *
 from Schema import *
 import hashlib, time, sys, getopt
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import parser
 import Log2Data
 

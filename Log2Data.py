@@ -1,7 +1,7 @@
 from mongoengine import *
 from Schema import *
 import hashlib, time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class Logger:
     '''
@@ -16,6 +16,9 @@ class Logger:
     testmode = False
     docCache = []
     docCacheLimit = 100000
+    breakdownCache = []
+    breakdownCacheLimit = 100000
+
     velocity = 139000 #current efficiency records/minute
 
     def __init__(self):
@@ -54,12 +57,6 @@ class Logger:
             #raw_log = _raw_log
         )
         self.docCache.append(log)
-        try:
-            if self.testmode==False:
-                #log.save()
-                pass
-        except:
-            print('Failed to write ' + _md5)
 
     def getDomain(self,url):
         _url = url.replace('http://','').replace('https://','')
@@ -78,43 +75,66 @@ class Logger:
         #earliestDate = Squidlog._get_collection().aggregate
 
     def getBreakdown(self,field='domain'):
-        field='domain'
-        breakdown = Squidlog._get_collection().aggregate(
-            [
-                {
-                    '$group':{
-                        '_id':{
-                            field:'$'+field,
+        total_seconds_in_a_day = 60 * 60 * 24
+        seconds_in_a_segment = total_seconds_in_a_day / 24
+        processed = 0
+        # start_date = earliest date in the log.
+        # end_date = last date in the log
+        start_date =  datetime.fromtimestamp(time.mktime(time.strptime('10/Sep/2015:00:00:00','%d/%b/%Y:%H:%M:%S')))
+        end_date = datetime.now()
+        #print('>>>>>>>>{}', end_date - start_date)
+        num_days = (end_date-start_date).days
+        num_records = 0
+        for day in range(num_days):
+            current_start_date = start_date + timedelta(days=day)
+            hour_start = current_start_date
+            end_segment = current_start_date
+            for i in range(24):
+                end_segment = hour_start+ timedelta(hours=1)
+                # load data from log where date is greater or equal to hour_start
+                # and less than end_segment. Grouped by domain, count
+                breakdown = Squidlog._get_collection().aggregate(
+                    [
+                        {
+                            '$match':{'$and': [{'datetime':{'$gte':hour_start}},{'datetime':{'$lt':end_segment}}]}
                         },
-                        'count':{'$sum':1},
-                        'mindate':{'$min':'$datetime'},
-                        'maxdate':{'$max':'$datetime'}
-                    }
-                }
-            ]
-        )
-        for r in breakdown:
-            #domain = r['domain']
-            _date_from = r['mindate']
-            _date_to = r['maxdate']
-            _domain = r['_id']['domain']
-            _visits = r['count']
-            unique = _domain + str(_date_from) + str(_date_to)
-            self.m.update(unique.encode('utf-8'))
-            _md5 = self.m.hexdigest()
-            dbd = DomainBreakdown(
-                md5 = _md5,
-                datetimefrom = _date_from,
-                datetimeto = _date_to,
-                domain = _domain,
-                visits = _visits
-            )
-            try:
-                if not self.testmode:
-                    pass
-                    #dbd.save()
-            except:
-                print('Failed to write ' + _md5)
+                        {
+                            '$group':{'_id':{'domain':'$domain',},'count':{'$sum':1},}
+                        }
+                    ]
+                )
+                # clear target
+                targetClear = DomainBreakdown._get_collection(
+                    [
+                        {'$match':{'$and':[{'datetimefrom':{'$eq':hour_start}},{'datetimeto':{'$eq':end_segment}}],},},
+                    ]
+                ).delete()
+                print('>>'+str(hour_start)+' -- '+str(end_segment))
+                for r in breakdown:
+                    #domain = r['domain']
+                    _date_from = hour_start
+                    _date_to = end_segment
+                    _domain = r['_id']['domain']
+                    _visits = r['count']
+                    unique = _domain + str(_date_from) + str(_date_to)
+                    self.m.update(unique.encode('utf-8'))
+                    _md5 = self.m.hexdigest()
+                    dbd = DomainBreakdown(
+                        md5 = _md5,
+                        datetimefrom = _date_from,
+                        datetimeto = _date_to,
+                        domain = _domain,
+                        visits = _visits
+                    )
+                    self.breakdownCache.append(dbd)
+                #end loop setting
+                hour_start = end_segment
+                num_records += 1
+                ###
+        if (len(self.breakdownCache)>0):
+            print('saving')
+            DomainBreakdown.objects.insert(self.breakdownCache)
+            self.breakdownCache = []
         return breakdown
 
     def delete(self):
