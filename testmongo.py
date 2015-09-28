@@ -3,10 +3,10 @@ from mongoengine import *
 from Schema import *
 import hashlib, time, sys, getopt
 from datetime import datetime, timedelta
-from dateutil import parser
+#from dateutil import parser
 import Log2Data
 
-logfile = 'access.log-20150920'
+logfile = 'access.log-20150927'
 filelength = 0
 
 def stat():
