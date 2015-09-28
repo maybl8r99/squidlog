@@ -1,5 +1,6 @@
 from mongoengine import *
 from Schema import *
+import hashlib, time, sys, gc
 from datetime import datetime, timedelta
 
 class Logger:
@@ -14,7 +15,7 @@ class Logger:
     conn = None
     testmode = False
     docCache = []
-    docCacheLimit = 100000
+    docCacheLimit = 500000
     breakdownCache = []
     breakdownCacheLimit = 100000
 
@@ -183,6 +184,7 @@ class Logger:
 
     def parseFile(self,filename,logType='squid'):
         if logType == 'squid':
+            gc.disable()
             with open(filename, 'r', encoding=self.encoding) as infile:
                 for l in infile:
                     self.addSquidLog(l.replace('\n',''))
@@ -190,10 +192,13 @@ class Logger:
                         print('saving data')
                         Squidlog.objects.insert(self.docCache)
                         self.docCache = []
+                        gc.collect()
                 # check for leftovers in cache
                 if len(self.docCache) > 0:
                     Squidlog.objects.insert(self.docCache)
                     self.docCache = []
+                    gc.collect()
+            gc.enable()
             self.getBreakdown()
             #   #   #
         else:
