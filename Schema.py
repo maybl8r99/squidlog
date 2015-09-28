@@ -3,7 +3,7 @@ from mongoengine import *
 class Squidlog(Document):
     md5 = StringField(required=True, max_length=50, unique=True)
     datetime = DateTimeField(required=True)
-    remote_host = StringField(max_length=500)
+    remote_host = StringField(max_length=100)
     status = StringField(max_length=50)
     size_bytes = IntField()
     method = StringField(max_length=20)
@@ -14,6 +14,11 @@ class Squidlog(Document):
     doc_type = StringField(max_length=20)
     #raw_log = StringField()
 
+    meta = {
+        'indexes':[
+            'datetime',
+        ]
+    }
     #meta = {
     #    'indexes' : [
     #        'md5',
@@ -31,7 +36,7 @@ class DomainBreakdown(Document):
     md5 = StringField(max_length=50,unique=True)
     datetimefrom = DateTimeField()
     datetimeto = DateTimeField()
-    domain = StringField()
+    domain = StringField(max_length=100)
     visits = IntField()
 
     meta = {
